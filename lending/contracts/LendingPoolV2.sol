@@ -61,6 +61,13 @@ contract LendingPoolV2 {
         uint256 timestamp
     );
 
+    event Liquidate(
+        address liquidateUser,
+        address debtUser,
+        uint256 amount, 
+        uint256 timestamp
+    );
+
     function addLoan(
         uint256 _loanToValue,
         uint256 _liquidationThreshold,
@@ -95,6 +102,8 @@ contract LendingPoolV2 {
         return healthFactor[user];
     }
 
+
+    //function to user when liquidate
     function getHealthFactor2(address user) public returns(uint256){
         uint256 index = loan_to_user[user];
         uint256 liquid_Threshold = loans[index].liquid_Thres;
@@ -280,5 +289,6 @@ contract LendingPoolV2 {
         (bool sent, ) = msg.sender.call{value: debtClaim}("");
         require(sent, "Failed to send Ether ");
 
+        emit Liquidate(msg.sender, user, debt, block.timestamp);
     }
 }
