@@ -9,18 +9,17 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 contract LendingPoolV2 {
     using SafeMath for uint256;
 
-    address stableTokenAddress = 0x8c980983A305673CAcC33754CE23874aDFdDabB0;
-    StableToken public stableToken = StableToken(stableTokenAddress);
+    address stableTokenAddr = 0x9d83e140330758a8fFD07F8Bd73e86ebcA8a5692;
+    StableToken public stableToken = StableToken(stableTokenAddr);
 
-    address oracleAddress = 0x4DBd02d4798e32D0F5B61Dcab69135EC2A9281c9;
-    PriceConsumerV3 public oracle = PriceConsumerV3(oracleAddress);
-
-    // constructor(PriceConsumerV3 _oracle) {
-    //     oracle = _oracle;
-    // }
+    address oracleAddr = 0xDA0bab807633f07f013f94DD0E6A4F96F8742B53; 
+    PriceConsumerV3 public oracle =  PriceConsumerV3(oracleAddr);
 
     uint256 public constant DEPOSIT_RATE = 2;
     uint256 public constant DEPOSIT_TIME = 10;
+
+    uint256 public constant CLOSE_FACTOR = 5;
+    uint256 public constant LIQUITATION_SPREAD = 1;
 
     struct Loan {
         uint256 LTV;
@@ -93,6 +92,16 @@ contract LendingPoolV2 {
         healthFactor[user] =
             (collaterals[user] * getEthUSDPrice() * liquid_Threshold) /
             ((10**(28) * debt));
+        return healthFactor[user];
+    }
+
+    function getHealthFactor2(address user) public returns(uint256){
+        uint256 index = loan_to_user[user];
+        uint256 liquid_Threshold = loans[index].liquid_Thres;
+        uint256 debt = borrowAmounts[user];
+        healthFactor[user] =
+            (collaterals[user] * 1600 * liquid_Threshold) /
+            ((10**(20) * debt));
         return healthFactor[user];
     }
 
@@ -243,5 +252,33 @@ contract LendingPoolV2 {
         collaterals[msg.sender] = collaterals[msg.sender].sub(collateralRepay);
 
         emit Repay(msg.sender, repayAmount, collateralRepay, block.timestamp);
+    }
+
+    function liquidateCall(address user) external payable{
+        uint256 HF = getHealthFactor2(user);
+        require( HF<1 , "You can not liquidate this user");
+
+        uint8 index = loan_to_user[user];
+
+        uint256 debt = (borrowAmounts[user]*CLOSE_FACTOR)/10;
+        uint256 debtPay = debt*(100+loans[index].interest_rate)/100;
+
+        stableToken.transferFrom(msg.sender, address(this), debtPay);
+
+        uint256 debtClaim = debt*(10+LIQUITATION_SPREAD)/10;
+
+        //uint256 price8 = getEthUSDPrice();
+        uint256 price8 = 160000000000;
+
+        debtClaim = (debtClaim*(10**26)/price8);
+
+        collaterals[user] = collaterals[user].sub(debtClaim);
+        borrowAmounts[user] = borrowAmounts[user].sub(debt);
+        
+        totalBorrows = totalBorrows.sub(debt);
+
+        (bool sent, ) = msg.sender.call{value: debtClaim}("");
+        require(sent, "Failed to send Ether ");
+
     }
 }
