@@ -5,14 +5,13 @@ import "./PriceConsumerV3.sol";
 import "./StableToken.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
-
 contract LendingPoolV2 {
     using SafeMath for uint256;
 
-    address stableTokenAddr = 0x9d83e140330758a8fFD07F8Bd73e86ebcA8a5692;
+    address stableTokenAddr = 0xf561df10e12fEB4a879d6844E25c0d084C115838;
     StableToken public stableToken = StableToken(stableTokenAddr);
 
-    address oracleAddr = 0xDA0bab807633f07f013f94DD0E6A4F96F8742B53; 
+    address oracleAddr = 0xE6Be3AE9c74Fe5a4fF73d1eFb4363E87e42E3e42; 
     PriceConsumerV3 public oracle =  PriceConsumerV3(oracleAddr);
 
     uint256 public constant DEPOSIT_RATE = 2;
@@ -21,6 +20,8 @@ contract LendingPoolV2 {
     uint256 public constant CLOSE_FACTOR = 5;
     uint256 public constant LIQUITATION_SPREAD = 1;
 
+    uint256 private timePlus = 100;
+
     struct Loan {
         uint256 LTV;
         uint256 liquid_Thres;
@@ -28,8 +29,8 @@ contract LendingPoolV2 {
     }
     Loan[] public loans;
 
-    uint256 private totalDeposits;
-    uint256 private totalBorrows;
+    uint256 public totalDeposits;
+    uint256 public totalBorrows;
 
     mapping(address => uint256) public startTime;
 
@@ -89,6 +90,19 @@ contract LendingPoolV2 {
         return totalBorrows;
     }
 
+    function getSupply (address user) public view returns(uint256){
+        return supply[user];
+    }
+
+    function getCollateral (address user) public view returns(uint256){
+        return collaterals[user];
+    }
+
+    function getBorrowAmount(address user) public view returns(uint256){
+        return borrowAmounts[user];
+    }
+
+
     function getHealthFactor(address user) public returns(uint256){
         uint256 index = loan_to_user[user];
         uint256 liquid_Threshold = loans[index].liquid_Thres;
@@ -98,19 +112,17 @@ contract LendingPoolV2 {
         //     ((10**(20) * debt));
         healthFactor[user] =
             (collaterals[user] * getEthUSDPrice() * liquid_Threshold) /
-            ((10**(28) * debt));
+            ((10**(10) * debt));
         return healthFactor[user];
     }
 
-
-    //function to user when liquidate
-    function getHealthFactor2(address user) public returns(uint256){
+    function getHealthFactorLiquidate(address user) public returns(uint256){
         uint256 index = loan_to_user[user];
         uint256 liquid_Threshold = loans[index].liquid_Thres;
         uint256 debt = borrowAmounts[user];
         healthFactor[user] =
             (collaterals[user] * 1600 * liquid_Threshold) /
-            ((10**(20) * debt));
+            ((10**(2) * debt));
         return healthFactor[user];
     }
 
@@ -125,9 +137,7 @@ contract LendingPoolV2 {
      **/
 
     function deposit(uint256 amount) external payable {
-        require(msg.value > 0, "Deposit amount must be greater than 0");
-
-        require(amount == msg.value, "Deposit amount not enough");
+        require(amount > 0, "Deposit amount must be greater than 0");
 
         startTime[msg.sender] = block.timestamp;
 
@@ -182,13 +192,11 @@ contract LendingPoolV2 {
      * provided that the borrower already deposited enough collateral (ETH)
      * @param amount The amount Token to be borrowed
      * @param index the index of loan package
-     * @return max_value_to_loan the maximum value of token can loan
      **/
 
     function borrow(uint256 amount, uint8 index)
         external
         payable
-        returns (uint256)
     {
         require(amount > 0, "Borrow amount must be greater than 0");
 
@@ -199,7 +207,7 @@ contract LendingPoolV2 {
 
         // uint256 priceOfBalance = (balance * 1500) / (10**18);
         uint256 price = getEthUSDPrice();
-        uint256 priceOfBalance = (balance * price) / (10**26);
+        uint256 priceOfBalance = (balance * price) / (10**8);
 
         uint256 max_value_to_loan = (priceOfBalance * LTV) / 100;
         require(
@@ -208,7 +216,7 @@ contract LendingPoolV2 {
         );
 
         // uint256 amountETH = (amount * (10**20) )/ (1500*LTV);
-        uint256 amountETH = (amount * (10**28) )/ (price*LTV);
+        uint256 amountETH = (amount * (10**10) )/ (price*LTV);
         require(
             amount < stableToken.balanceOf(address(this)),
             "Not enough stable token"
@@ -226,7 +234,6 @@ contract LendingPoolV2 {
 
         emit Borrow(msg.sender, amount, index, block.timestamp);
 
-        return max_value_to_loan;
     }
 
     /**
@@ -252,7 +259,7 @@ contract LendingPoolV2 {
         stableToken.transferFrom(msg.sender, address(this), repayAmount);
 
         uint256 price = getEthUSDPrice();
-        uint256 collateralRepay = (amount * (10**26)) / price;
+        uint256 collateralRepay = (amount * (10**8)) / price;
         (bool sent, ) = msg.sender.call{value: collateralRepay}("");
         require(sent, "Failed to send Ether ");
 
@@ -264,7 +271,7 @@ contract LendingPoolV2 {
     }
 
     function liquidateCall(address user) external payable{
-        uint256 HF = getHealthFactor2(user);
+        uint256 HF = getHealthFactorLiquidate(user);
         require( HF<1 , "You can not liquidate this user");
 
         uint8 index = loan_to_user[user];
@@ -279,7 +286,7 @@ contract LendingPoolV2 {
         //uint256 price8 = getEthUSDPrice();
         uint256 price8 = 160000000000;
 
-        debtClaim = (debtClaim*(10**26)/price8);
+        debtClaim = (debtClaim*(10**8)/price8);
 
         collaterals[user] = collaterals[user].sub(debtClaim);
         borrowAmounts[user] = borrowAmounts[user].sub(debt);
