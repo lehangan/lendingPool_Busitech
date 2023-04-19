@@ -29,7 +29,7 @@ contract LendingPoolV2 {
     }
     Loan[] public loans;
 
-    uint256 public totalDeposits;
+    //uint256 public totalDeposits;
     uint256 public totalBorrows;
 
     mapping(address => uint256) public startTime;
@@ -83,7 +83,7 @@ contract LendingPoolV2 {
     }
 
     function getTotalDeposit() public view returns (uint256) {
-        return totalDeposits;
+        return address(this).balance;
     }
 
     function getTotalBorrow() public view returns (uint256) {
@@ -142,12 +142,8 @@ contract LendingPoolV2 {
         startTime[msg.sender] = block.timestamp;
 
         supply[msg.sender] = supply[msg.sender].add(amount);
-        totalDeposits = totalDeposits.add(amount);
+        //totalDeposits = totalDeposits.add(amount);
 
-        require(
-            totalDeposits == address(this).balance,
-            "Total deposit ETH is not enough"
-        );
         emit Deposit(msg.sender, amount, block.timestamp);
     }
 
@@ -174,7 +170,7 @@ contract LendingPoolV2 {
         amountToWithdraw = (amountToWithdraw * (100 + DEPOSIT_RATE)) / 100;
         supply[msg.sender] = supply[msg.sender].sub(amountToWithdraw);
 
-        totalDeposits = totalDeposits.sub(amountToWithdraw);
+        //totalDeposits = totalDeposits.sub(amountToWithdraw);
 
         require(
             amountToWithdraw <= address(this).balance,
@@ -222,7 +218,7 @@ contract LendingPoolV2 {
             "Not enough stable token"
         );
 
-        totalDeposits = totalDeposits.sub(amountETH);
+        // totalDeposits = totalDeposits.sub(amountETH);
         supply[msg.sender] = supply[msg.sender].sub(amountETH);
         collaterals[msg.sender] = collaterals[msg.sender].add(amountETH);
 
